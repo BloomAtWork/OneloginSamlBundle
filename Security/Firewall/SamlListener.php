@@ -12,72 +12,74 @@ use Symfony\Component\Security\Http\Firewall\AbstractAuthenticationListener;
 
 class SamlListener extends AbstractAuthenticationListener
 {
-    const IDP_NAME_SESSION_NAME = 'saml_idp_name';
+	const IDP_NAME_SESSION_NAME = 'saml_idp_name';
+	const IDP_SAML_TOKEN = 'saml_idp_token';
 
-    /**
-     * @var OneLoginAuthRegistry
-     */
-    private $authRegistry;
+	/**
+	 * @var OneLoginAuthRegistry
+	 */
+	private $authRegistry;
 
-    /**
-     * @var string
-     */
-    private $defaultIdpName;
+	/**
+	 * @var string
+	 */
+	private $defaultIdpName;
 
-    public function setAuthRegistry(OneLoginAuthRegistry $authRegistry)
-    {
-        $this->authRegistry = $authRegistry;
-    }
+	public function setAuthRegistry(OneLoginAuthRegistry $authRegistry)
+	{
+		$this->authRegistry = $authRegistry;
+	}
 
-    public function setDefaultIdpName(string $defaultIdpName)
-    {
-        $this->defaultIdpName = $defaultIdpName;
-    }
+	public function setDefaultIdpName(string $defaultIdpName)
+	{
+		$this->defaultIdpName = $defaultIdpName;
+	}
 
-    /**
-     * Performs authentication.
-     *
-     * @param Request $request A Request instance
-     * @return TokenInterface|Response|null The authenticated token, null if full authentication is not possible, or a Response
-     *
-     * @throws AuthenticationException if the authentication fails
-     * @throws \Exception if attribute set by "username_attribute" option not found
-     */
-    protected function attemptAuthentication(Request $request)
-    {
-        // Get current IdP name or use the single configured IdP
-        $idpName = $request->getSession()->get(self::IDP_NAME_SESSION_NAME, 'default');
+	/**
+	 * Performs authentication.
+	 *
+	 * @param Request $request A Request instance
+	 * @return TokenInterface|Response|null The authenticated token, null if full authentication is not possible, or a Response
+	 *
+	 * @throws AuthenticationException if the authentication fails
+	 * @throws \Exception if attribute set by "username_attribute" option not found
+	 */
+	protected function attemptAuthentication(Request $request)
+	{
+		// Get current IdP name or use the single configured IdP
+		$idpName = $request->getSession()->get(self::IDP_NAME_SESSION_NAME, 'default');
 
-        $oneLoginAuth = $this->authRegistry->getIdpAuth($idpName);
+		$oneLoginAuth = $this->authRegistry->getIdpAuth($idpName);
 
-        $oneLoginAuth->processResponse();
-        if ($oneLoginAuth->getErrors()) {
-            $this->logger->error($oneLoginAuth->getLastErrorReason());
-            throw new AuthenticationException($oneLoginAuth->getLastErrorReason());
-        }
+		$oneLoginAuth->processResponse();
+		if ($oneLoginAuth->getErrors()) {
+			$this->logger->error($oneLoginAuth->getLastErrorReason());
+			throw new AuthenticationException($oneLoginAuth->getLastErrorReason());
+		}
 
-        if (isset($this->options['use_attribute_friendly_name']) && $this->options['use_attribute_friendly_name']) {
-            $attributes = $oneLoginAuth->getAttributesWithFriendlyName();
-        } else {
-            $attributes = $oneLoginAuth->getAttributes();
-        }
-        $attributes['sessionIndex'] = $oneLoginAuth->getSessionIndex();
-        $token = new SamlToken();
-        $token->setAttributes($attributes);
-        $token->setIdpName($idpName);
+		if (isset($this->options['use_attribute_friendly_name']) && $this->options['use_attribute_friendly_name']) {
+			$attributes = $oneLoginAuth->getAttributesWithFriendlyName();
+		} else {
+			$attributes = $oneLoginAuth->getAttributes();
+		}
+		$attributes['sessionIndex'] = $oneLoginAuth->getSessionIndex();
+		$token = new SamlToken();
+		$token->setAttributes($attributes);
+		$token->setIdpName($idpName);
 
-        if (isset($this->options['username_attribute'])) {
-            if (!array_key_exists($this->options['username_attribute'], $attributes)) {
-                $this->logger->error(sprintf("Found attributes: %s", print_r($attributes, true)));
-                throw new \Exception(sprintf("Attribute '%s' not found in SAML data", $this->options['username_attribute']));
-            }
+		if (isset($this->options['username_attribute'])) {
+			if (!array_key_exists($this->options['username_attribute'], $attributes)) {
+				$this->logger->error(sprintf("Found attributes: %s", print_r($attributes, true)));
+				throw new \Exception(sprintf("Attribute '%s' not found in SAML data", $this->options['username_attribute']));
+			}
 
-            $username = $attributes[$this->options['username_attribute']][0];
-        } else {
-            $username = $oneLoginAuth->getNameId();
-        }
-        $token->setUser($username);
+			$username = $attributes[$this->options['username_attribute']][0];
+		} else {
+			$username = $oneLoginAuth->getNameId();
+		}
+		$token->setUser($username);
 
-        return $this->authenticationManager->authenticate($token);
-    }
+		$request->getSession()->set(self::IDP_SAML_TOKEN, $token);
+		return $this->authenticationManager->authenticate($token);
+	}
 }
