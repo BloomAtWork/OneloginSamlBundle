@@ -37,7 +37,8 @@ class SamlLogoutHandler implements LogoutHandlerInterface
             return;
         }
 
-        $auth = $this->authRegistry->getIdpAuth($token->getIdpName());
+        // Get IDP provider from Attributes
+        $auth = $this->authRegistry->getIdpAuth($token->getAttributes()['provider']);
         if (null === $auth) {
             throw new NotFoundHttpException('Auth service not found');
         }
