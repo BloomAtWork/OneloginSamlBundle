@@ -62,6 +62,11 @@ class SamlListener extends AbstractAuthenticationListener
 		} else {
 			$attributes = $oneLoginAuth->getAttributes();
 		}
+		// BUG FIX 
+		// Added this code so it will be used in logout
+		
+		$attributes['provider']= $idpName;
+		
 		$attributes['sessionIndex'] = $oneLoginAuth->getSessionIndex();
 		$token = new SamlToken();
 		$token->setAttributes($attributes);
